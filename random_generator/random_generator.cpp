@@ -2,7 +2,7 @@
 
 int main() {
     std::string matrixFile = "transition_matrix.txt";
-    std::vector<std::vector<double>> transitionProb(4, std::vector<double>(4, 0.0));
+    std::vector<std::vector<double> > transitionProb(4, std::vector<double>(4, 0.0));
 
     // 기존 저장된 전이 행렬이 있으면 불러오기
     std::ifstream checkFile(matrixFile);
