@@ -4,24 +4,12 @@
 #include <bitset> // For binary representation
 #include <math.h>
 #include <fstream>
+#include "random_generator.h"
 
 using namespace std;
-const int totalBits = 60;
-//const double initialmask = pow(2, totalBits);
-// Function to generate masks for each character in the input text
-// vector<unsigned long long> generateMasks(const string& text) {
-//     int textLength = text.size();
-//     vector<unsigned long long> masks(256, ~0ULL); // Initialize masks for all characters with all bits set to 1
+const int totalBits = 1000;
+int totalMismatch = 0;
 
-//     // For each character in the text, update its mask
-//     for (int i = 0; i < textLength; ++i) {
-//         char ch = text[i];
-//         masks[ch] &= ~(1ULL << i); // Set the bit corresponding to the character's index to 0
-//     }
-    
-
-//     return masks;
-// }
 void saveToFile(const string& filePath, const string& content) {
     ofstream outputFile(filePath);
     if (!outputFile.is_open()) {
@@ -51,40 +39,6 @@ vector<bitset<totalBits> > generateMasks(const string& text) {
     return masks;
 }
 
-// // Shift-OR Algorithm for pattern matching
-// bool shiftOrMatch(const string& text, const string& pattern) {
-//     int m = pattern.size();  // Pattern length
-//     vector<bitset<totalBits> > mask = generateMasks(pattern);
-
-
-//     bitset<totalBits> state; // Initial state (all bits set to 1)
-//     state.set();
-//     cout << "Initial State: " << bitset<totalBits>(state) << endl;
-
-//     for (char ch : text) {
-//         // 현재 문자의 마스크를 적용한 상태 갱신
-//         state = (state << 1); // 오른쪽에 0 추가
-//         state |= mask[ch];       // 현재 문자의 마스크와 OR 연산
-//         // cout << "Character: '" << ch << "' | Mask: " << bitset<totalBits>(mask[ch])
-//         //     << " | State: " << bitset<totalBits>(state) << endl;
-//     }
-
-//     // // 매칭 조건: m번째 비트가 0인지 확인
-//     // unsigned int matchBit = 1 << (m - 1); // m번째 비트 위치 계산
-//     // if ((state & matchBit) == 0) { // m번째 비트가 0이면 매칭
-//     //     cout << "Matched State: " << bitset<totalBits>(state) << endl;
-//     //     return true;
-//     // }
-//      // 매칭 조건: 마지막 m번째 비트가 0인지 확인
-//     bitset<totalBits> matchBit;
-//     matchBit.set(m - 1); // m번째 비트를 1로 설정
-//     if ((state & matchBit) == 0) {
-//         cout << "Matched State: " << state << endl;
-//         return true;
-//     }
-
-//     return false;
-// }
 bool shiftOrWithMismatches(const string& text, const string& pattern,string& replacedText, int maxMismatches,int startpos) {
     int m = pattern.size();  // Pattern 길이
     vector<bitset<totalBits> > mask = generateMasks(pattern);
@@ -116,8 +70,8 @@ bool shiftOrWithMismatches(const string& text, const string& pattern,string& rep
         }
 
         // 상태 출력
-        cout << "Character: '" << ch << "' | State: " << state
-            << " | Mismatches: " << mismatches << endl;
+        // cout << "Character: '" << ch << "' | State: " << state
+        //     << " | Mismatches: " << mismatches << endl;
 
         // 매칭 조건 확인
         bitset<totalBits> matchBit;
@@ -129,6 +83,7 @@ bool shiftOrWithMismatches(const string& text, const string& pattern,string& rep
                 cout << "mismatches at pos, replacedText[], pattern[] " << pos << ", "<<replacedText[pos+startpos]<< ", "<<pattern[pos]<< endl;
                 replacedText[pos+startpos] = pattern[pos]; // 텍스트를 패턴의 문자로 대체
             }
+            totalMismatch += mismatches;
             return true;
         }
     }
@@ -136,60 +91,6 @@ bool shiftOrWithMismatches(const string& text, const string& pattern,string& rep
     cout << "No match found within " << maxMismatches << " mismatches." << endl;
     return false;
 }
-// bool shiftOrWithSNPReplacement(const string& text, const string& pattern, int maxMismatches, string& replacedText) {
-//     int m = pattern.size();  // Pattern 길이
-//     vector<bitset<totalBits> > mask = generateMasks(pattern);
-
-//     bitset<totalBits> state; // 상태 (초기: 모든 비트 1)
-//     state.set();
-
-//     int mismatches = 0; // Mismatch 카운트
-//     vector<int> mismatchPositions; // Mismatch 위치 추적
-
-//     replacedText = text; // 텍스트 복사 (대체를 위해)
-
-//     for (size_t i = 0; i < text.size(); ++i) {
-//         char ch = text[i];
-//         bitset<totalBits> prevState = state;
-
-//         // 현재 문자에 따라 상태 갱신
-//         state = (prevState << 1) | mask[ch];
-
-//         // 매칭 실패 처리: 현재 매칭 중인 글자 위치의 비트를 확인
-//         if (!state[i]) { // 현재 매칭 위치의 비트가 0이면 실패
-//             mismatches++;
-//             mismatchPositions.push_back(i); // Mismatch 위치 저장
-//             if (mismatches > maxMismatches) {
-//                 cout << "Exceeded maximum mismatches at position " << i << endl;
-//                 return false; // 최대 허용 Mismatch 초과
-//             }
-//             // 매칭 실패 시 상태를 초기화 (글자 수에 맞는 유효 상태로 설정)
-//             state.set();
-//             state.reset(i);
-//         }
-
-//         // 상태 출력
-//         cout << "Character: '" << ch << "' | State: " << state
-//             << " | Mismatches: " << mismatches << endl;
-
-//         bitset<totalBits> matchBit;
-//         matchBit.set(m - 1); // m번째 비트를 1로 설정
-//         if ((state & matchBit) == 0) {
-//             cout << "Pattern matched with " << mismatches << " mismatches." << endl;
-
-//             // Mismatch 위치를 기준으로 SNP 대체
-//             for (int pos : mismatchPositions) {
-//                 replacedText[pos+startpos] = pattern[pos]; // 텍스트를 패턴의 문자로 대체
-//             }
-
-//             return true; // 매칭 성공
-//         }
-//     }
-
-//     cout << "No match found within " << maxMismatches << " mismatches." << endl;
-//     return false;
-// }
-
 
 
 // Generate prefixes of a given size from the text
@@ -229,15 +130,15 @@ vector<int> prefixComparison(const string& text, const vector<string>& prefixes)
 
 
 int main() {
-    string text = "agcgt";
+    
     int flag = 0;
-    // Generate masks for the input text
-    vector<bitset<totalBits> > masks = generateMasks(text);
-    int prefixSize = 11;
-    string originalText = "AGAGGACTCAGTAAAGGCTGTGCTGGCAATAACATCAAACTACTGAATTCTTTAAGAAC";
+    
+    int prefixSize = 50;
+    string originalText;
     string comparisonText;
     string replacedText;
-    ifstream inputFile("/Users/a1/algorithm/out_put_0.txt");
+    ifstream inputFile("out_put_0.txt");
+    int n,m;
 
     if (!inputFile.is_open()) {
         cerr << "Error: Unable to open file." << endl;
@@ -259,37 +160,60 @@ int main() {
     }
     replacedText = comparisonText;
 
-    cout << "Original Text: " << originalText << endl;
-    // Generate prefixes from the original text
-    vector<string> prefixes = generatePrefixes(originalText, prefixSize);
-
-    // Prefix Comparison (1차 검증)
-    vector<int> startPositions = prefixComparison(comparisonText, prefixes);
-    if (startPositions.empty()) {
-        cout << "No matches found in prefix comparison." << endl;
-        return 0;
-    }
-    else{
-        for (int startPos : startPositions)
-            cout<< "matchposition: " << startPos << endl;
+    cout << "Enter the length of each DNA sequence (n): ";
+    while (!(cin >> n) || n <= 0) {
+        cout << "Invalid input. Please enter a positive integer for sequence length (n): ";
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
     }
 
-    // Shift-OR Matching (2차 검증)
-    for (int startPos : startPositions) {
-        // Compare only up to the length of the original text
-        //cout << "matchposition: " << startPos << endl;
-        string subText = comparisonText.substr(startPos, originalText.size());
-        cout << "\nTesting SubText: " << subText << endl;
-        if (shiftOrWithMismatches(subText, originalText,replacedText,30,startPos)){
-        //if(shiftOrWithSNPReplacement(subText, originalText, 30, replacedText)){
-            cout << "Pattern matched at position: " << startPos << endl;
-            // 파일로 저장
-            string outputPath = "replaced_text.txt";
-            saveToFile(outputPath, replacedText);
-            flag =1;
+    cout << "Enter the number of DNA sequences to generate (m): ";
+    while (!(cin >> m) || m <= 0) {
+        cout << "Invalid input. Please enter a positive integer for the number of sequences (m): ";
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    }
+
+    vector<string> sequences = DnaGenerator(n, m);
+
+    // SNP 대체 작업
+    for (size_t seqIndex = 0; seqIndex < sequences.size(); ++seqIndex) {
+        string originalText = sequences[seqIndex]; // DnaGenerator에서 생성된 시퀀스
+
+        cout << "\nProcessing Sequence " << (seqIndex + 1) << ": " << originalText << endl;
+        vector<string> prefixes = generatePrefixes(originalText, prefixSize);
+
+        // Prefix Comparison (1차 검증)
+        vector<int> startPositions = prefixComparison(comparisonText, prefixes);
+        if (startPositions.empty()) {
+            cout << "No matches found in prefix comparison." << endl;
+            
         }
+        else{
+            for (int startPos : startPositions)
+                cout<< "matchposition: " << startPos << endl;
+        }
+
+        // Shift-OR Matching (2차 검증)
+        for (int startPos : startPositions) {
+            // Compare only up to the length of the original text
+            //cout << "matchposition: " << startPos << endl;
+            string subText = comparisonText.substr(startPos, originalText.size());
+            cout << "\nTesting SubText: " << subText << endl;
+            if (shiftOrWithMismatches(subText, originalText,replacedText,n/10,startPos)){
+            //if(shiftOrWithSNPReplacement(subText, originalText, 30, replacedText)){
+                cout << "Pattern matched at position: " << startPos << endl;
+        
+                // 파일로 저장
+                string outputPath = "replaced_text.txt";
+                saveToFile(outputPath, replacedText);
+                flag =1;
+            }
+        }
+        if(flag){
+            cout <<"SNP: "<<totalMismatch<< " SNP per total text: "<<fixed<<setprecision(10)<< (long double)totalMismatch/10000000 << endl;
+        }else{
+            cout << "No matches found." << endl;}
     }
-    if(!flag){
-        cout << "No matches found." << endl;}
     return 0;
 }

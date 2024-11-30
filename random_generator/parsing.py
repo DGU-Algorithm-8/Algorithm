@@ -63,4 +63,4 @@ def parse_fasta_and_save(fasta_file, output_prefix, chunk_size=10_000_000):
 
     print(f"\nFinished processing. Total characters processed: {total_processed}")
 
-parse_fasta_and_save("/Users/a1/algorithm/Algorithm/random_generator/GCF_009914755.1_T2T-CHM13v2.0_genomic.fna", "out_put", chunk_size=10_000_000)
+parse_fasta_and_save("/Users/a1/algorithm/Algorithm/random_generator/GCF_009914755.1_T2T-CHM13v2.0_genomic.fna", "out_put", chunk_size=300_000_000)
