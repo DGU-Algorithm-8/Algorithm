@@ -4,7 +4,7 @@
 #include <bitset> // For binary representation
 #include <math.h>
 #include <fstream>
-#include "random_generator.h"
+#include "random_generator.cpp"
 
 using namespace std;
 const int totalBits = 1000;
