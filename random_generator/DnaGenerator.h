@@ -1,5 +1,5 @@
 #ifndef dnagenerator_h
-#define dnagenerator_h
+#define dna
 
 #include <iostream>
 #include <string>
