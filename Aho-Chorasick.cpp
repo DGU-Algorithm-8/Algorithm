@@ -15,21 +15,25 @@
 
 #include "random_generator/DnaGenerator.h"       // DnaGenerator.h 헤더 파일 포함
 
-// Constants
+// 시스템 하드웨어 스레ㄷ 개수
 const unsigned int NUM_THREADS = std::thread::hardware_concurrency();
 
 // 뮤텍스 및 조건 변수 선언
-std::mutex output_mutex;
+std::mutex output_mutex; // 출력 동기화를 위한 뮤텍스
 std::mutex queue_mutex;  // 작업 큐 동기화를 위한 뮤텍스
 
 // 진행률 계산을 위한 원자적 변수
-std::atomic<long long> total_processed(0);
+std::atomic<long long> total_processed(0); // 처리된 작업 수를 원자적으로 추적
 long long total_work = 0; // 전체 작업량 (패턴 수 × 텍스트 길이)
 
 // SNP 위치의 전체 집합을 저장하기 위한 전역 변수 추가
-std::vector<bool> globalSnpPositions;
+std::vector<bool> globalSnpPositions; // 각 위치의 SNP 여부를 비트로 저장
 
-// 문자에서 인덱스로 변환
+/*
+    문자를 인덱스로 반환하는 함수
+    A, T, C, G를 각각 0, 1, 2, 3으로 매핑
+    유효하지 않은 문자인 경우 -1 반환
+*/
 int charToIndex(char c) {
     switch (c) {
         case 'A': return 0;
@@ -40,7 +44,11 @@ int charToIndex(char c) {
     }
 }
 
-// Aho-Corasick 트라이 노드 구조체
+/* 
+    Aho-Corasick 트라이 노드 구조체
+    각 노드는 4개의 자식 노드를 가지며, A, T, C, G에 해당
+    실패함수 포인터와 매칭된 패턴의 인덱스를 저장
+*/
 struct TrieNode {
     std::array<TrieNode*, 4> children; // A, T, C, G
     TrieNode* failure; // 실패 함수 포인터
@@ -51,24 +59,37 @@ struct TrieNode {
     }
 };
 
-// 트라이에 패턴 삽입
+/* 
+    트라이에 패턴을 삽입하는 함수
+    주어진 패턴을 트라이에 삽입하고, 패턴의 인덱스를 출력 리스트에 추가
+    @parameters
+    - root: 트라이의 루트 노드
+    - pattern: 삽입할 패턴
+    - patternIndex: 패턴의 인덱스
+*/
 void insertPattern(TrieNode* root, const std::string& pattern, int patternIndex) {
-    TrieNode* node = root;
+    TrieNode* node = root; // 루트노드로부터 시작
     for (char c : pattern) {
-        int idx = charToIndex(c);
+        int idx = charToIndex(c); // 문자를 인덱스로 반환
         if (idx == -1) continue; // 유효하지 않은 문자 무시
         if (node->children[idx] == nullptr) {
-            node->children[idx] = new TrieNode();
+            node->children[idx] = new TrieNode(); // 자식 노드가 없으면 새로 생성
         }
-        node = node->children[idx];
+        node = node->children[idx]; // 다음 노드로 이동
     }
-    node->output.push_back(patternIndex);
+    node->output.push_back(patternIndex); // 패턴 인덱스를 출력 리스트에 추가
 }
 
-// 실패 함수 계산
+/*
+    트라이에 대한 실패 함수를 계산하는 함수
+    BFS를 사용하여 트라이의 실패 함수를 설정
+    실패 함수는 현재 노드에서 실패할 경우 이동할 노드를 가리킨다.
+    @parameters
+    - root: 트라이의 루트 노드
+*/
 void buildFailureLinks(TrieNode* root) {
-    std::queue<TrieNode*> q;
-    root->failure = root;
+    std::queue<TrieNode*> q; // BFS를 위한 큐
+    root->failure = root; // 루트의 실패 함수는 루트 자신
 
     // 루트의 자식 노드의 실패 함수를 루트로 설정하고 큐에 삽입
     for (int i = 0; i < 4; ++i) {
@@ -78,7 +99,7 @@ void buildFailureLinks(TrieNode* root) {
         }
     }
 
-    // BFS를 사용하여 실패 함수 설정
+    // BFS를 사용하여 트라이의 모든 노드에 대해 실패 함수 설정
     while (!q.empty()) {
         TrieNode* current = q.front();
         q.pop();
@@ -96,9 +117,9 @@ void buildFailureLinks(TrieNode* root) {
                 failure = failure->children[i];
             }
 
-            child->failure = failure;
+            child->failure = failure; // 실패 함수 설정
 
-            // 출력 함수 병합
+            // 실패 노드의 출력 리스트를 현재 노드의 출력 리스트에 병합
             for (int patternIndex : failure->output) {
                 child->output.push_back(patternIndex);
             }
@@ -108,16 +129,27 @@ void buildFailureLinks(TrieNode* root) {
     }
 }
 
-// Aho-Corasick 검색 함수 (오차 허용)
+/*
+    Aho-Corasick 알고리즘을 사용한 오차 허용 매칭 함수
+    @parameters
+    - text: 전체 텍스트 문자열
+    - root: Aho-Corasick 트라이의 루트 노드
+    - pattern: 검색할 패턴 문자열
+    - d: 허용할 오차 개수
+    - start_pos: 검색 시작 위치
+    - end_pos: 검색 종료 위치
+    @returns
+    - 매칭된 위치의 벡터
+*/
 std::vector<long long> aho_corasick_search_approx(
     const std::string& text, TrieNode* root, const std::string& pattern, int d, long long start_pos, long long end_pos) {
     
-    long long n = end_pos - start_pos;
-    int m = pattern.length();
+    long long n = end_pos - start_pos; // 검색할 텍스트 길이
+    int m = pattern.length(); // 패턴 길이
 
     // delta 테이블을 동적으로 생성하여 메모리 사용량 최적화
-    // delta[s][c]는 상태 s에서 문자 c를 읽었을 때의 다음 상태
-    int totalStates = (m + 1) * (d + 1);
+    // delta[s][c]는 상태 s에서 문자 c를 읽었을 때의 다음 상태를 나타냄
+    int totalStates = (m + 1) * (d + 1); // 전체 상태 수
     std::vector<std::array<int, 4>> delta(totalStates, std::array<int, 4>{-1, -1, -1, -1});
 
     // 상태 ID를 계산하는 함수
@@ -137,24 +169,24 @@ std::vector<long long> aho_corasick_search_approx(
         getState(s, i, e);
         for (int c = 0; c < 4; ++c) {
             if (i == m) {
-                delta[s][c] = s; // 수용 상태
+                delta[s][c] = s; // 이미 매칭된 상태
             } else {
-                char pc = pattern[i];
-                int pc_index = charToIndex(pc);
+                char pc = pattern[i]; // 패턴의 현재 문자
+                int pc_index = charToIndex(pc); 
                 if (pc_index == c) {
-                    delta[s][c] = stateID(i + 1, e);
+                    delta[s][c] = stateID(i + 1, e); // 문자가 일치하는 경우 다음 상태로 이동
                 } else if (e < d) {
-                    delta[s][c] = stateID(i + 1, e + 1);
+                    delta[s][c] = stateID(i + 1, e + 1); // 불일치하는 경우 오차 수 증가 후 다음 상태로 이동
                 }
             }
         }
     }
 
     // 활성 상태를 비트셋으로 추적하여 성능 최적화
-    std::vector<bool> activeStates(totalStates, false);
-    activeStates[stateID(0, 0)] = true;
+    std::vector<bool> activeStates(totalStates, false); // 현재 활성 상태를 추적
+    activeStates[stateID(0, 0)] = true; // 초기 상태 활성화
 
-    std::vector<long long> matches;
+    std::vector<long long> matches; // 매칭된 위치를 저장할 벡터
 
     for (long long pos = 0; pos < n; ++pos) {
         int c = charToIndex(text[start_pos + pos]);
@@ -162,12 +194,13 @@ std::vector<long long> aho_corasick_search_approx(
             // 유효하지 않은 문자면 루트 상태로 초기화
             activeStates.assign(totalStates, false);
             activeStates[stateID(0, 0)] = true;
-            total_processed++;
+            total_processed++; // 진행률 증가
             continue;
         }
 
-        std::vector<bool> newActiveStates(totalStates, false);
+        std::vector<bool> newActiveStates(totalStates, false); // 새로운 활성 상태
 
+        // 현재 활성 상태에 대해 다음 상태 계산
         for (int s = 0; s < totalStates; ++s) {
             if (activeStates[s]) {
                 int nextState = delta[s][c];
@@ -179,7 +212,7 @@ std::vector<long long> aho_corasick_search_approx(
                     if (i == m && e <= d) {
                         long long matchIndex = pos - m + 1;
 
-                        // 매칭 조건 강화
+                        // 매칭 조건 강화 (오차 허용)
                         if (matchIndex >= 0 && matchIndex + m <= n) {
                             int mismatchCount = 0;
                             bool validMatch = true;
@@ -187,14 +220,14 @@ std::vector<long long> aho_corasick_search_approx(
                             for (int k = 0; k < m; ++k) {
                                 if (text[start_pos + matchIndex + k] != pattern[k]) {
                                     mismatchCount++;
-                                    if (mismatchCount > d) {
+                                    if (mismatchCount > d) { // 오차 개수 초과 시 무효
                                         validMatch = false;
                                         break;
                                     }
                                 }
                             }
 
-                            if (validMatch) {
+                            if (validMatch) { // 유효한 매칭인 경우
                                 long long actualMatchIndex = start_pos + matchIndex;
                                 matches.push_back(actualMatchIndex);
 
@@ -214,7 +247,7 @@ std::vector<long long> aho_corasick_search_approx(
             }
         }
 
-        // 초기 상태 다시 활성화
+        // 다음 매칭을 위한 초기 상태 다시 활성화
         newActiveStates[stateID(0, 0)] = true;
 
         activeStates = std::move(newActiveStates);
@@ -226,7 +259,14 @@ std::vector<long long> aho_corasick_search_approx(
     return matches;
 }
 
-// 파일에서 서열 읽기 함수
+/*
+    파일에서 DNA 염기서열을 읽는 함수
+    FASTA 또는 일반 텍스트 파일에서 서열을 읽어들임
+    @parameters
+    - fileName: 서열 데이터가 포함된 파일 이름
+    @returns
+    - 읽어들인 서열 문자열
+*/
 std::string readSequenceFromFile(const std::string& fileName) {
     std::ifstream inputFile(fileName);
     if (!inputFile) {
@@ -283,11 +323,11 @@ std::string readSequenceFromFile(const std::string& fileName) {
 }
 
 int main() {
-    std::string text;
-    int patternLength;
-    int d;
-    int numPatterns;
-    std::string textFileName;
+    std::string text;           // 텍스트 문자열
+    int patternLength;          // 패턴 길이
+    int d;                      // 허용 오차 개수
+    int numPatterns;            // 생성할 랜덤 패턴의 개수
+    std::string textFileName;   // 텍스트 파일 이름
 
     std::cout << "원본 문자열이 포함된 텍스트 파일의 이름을 입력하세요: ";
     std::cin >> textFileName;
@@ -301,6 +341,8 @@ int main() {
     std::cout << "생성할 랜덤 패턴의 개수: ";
     std::cin >> numPatterns;
 
+
+    // 전이 행렬 파일 로드 또는 생성
     std::string matrixFile = "transition_matrix.txt";
     std::vector<std::vector<double>> transitionProb(4, std::vector<double>(4, 0.25)); // 기본 초기화
 
