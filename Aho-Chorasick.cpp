@@ -446,8 +446,6 @@ int main() {
     std::cout << "전체 문자열에 대한 오차율: " << snpPercentage << "%\n";
 
     // 메모리 정리 (트라이 노드 삭제)
-    // 트라이를 순회하며 모든 노드를 삭제하는 함수 구현 필요
-    // 여기서는 재귀적으로 모든 노드를 삭제하여 메모리 누수를 방지합니다.
     std::function<void(TrieNode*)> deleteTrie = [&](TrieNode* node) {
         if (!node) return;
         for (auto child : node->children) {
