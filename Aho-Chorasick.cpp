@@ -12,6 +12,7 @@
 #include <queue>                // 작업 큐를 위한 헤더 추가
 #include <condition_variable>   // 조건 변수 사용
 #include <functional>           // std::function 사용
+#include <filesystem>           // 파일 시스템 사용
 
 #include "random_generator/DnaGenerator.h"       // DnaGenerator.h 헤더 파일 포함
 
@@ -322,6 +323,123 @@ std::string readSequenceFromFile(const std::string& fileName) {
     return text;
 }
 
+/*
+    매칭 결과를 기반으로 텍스트를 변환하고 파일로 저장하는 함수
+    @parameters
+    - originalText: 원본 문자열
+    - matches: 매칭된 위치의 벡터 (패턴별 매칭 위치)
+    - sequences: 비교에 사용된 패턴 문자열 리스트
+    - transitionProb: 전이 확률 행렬
+    - outputFileName: 저장할 파일 이름
+*/
+void saveTransformedTextToFile(
+    const std::string& originalText,
+    const std::vector<std::vector<long long>>& matches,
+    const std::vector<std::string>& sequences,
+    const std::vector<std::vector<double>>& transitionProb,
+    const std::string& outputFileName) {
+    
+    std::ofstream outputFile(outputFileName);
+    if (!outputFile) {
+        std::cerr << "파일을 생성할 수 없습니다: " << outputFileName << std::endl;
+        exit(1);
+    }
+
+    // 결과 텍스트를 저장할 문자열
+    std::string resultText = originalText;
+
+    // 오차 발생 시 전이 확률 행렬을 기반으로 새로운 문자 생성
+    auto generateRandomBase = [&](char currentBase) -> char {
+        static const char bases[] = {'A', 'T', 'C', 'G'};
+        int currentIndex = charToIndex(currentBase);
+        if (currentIndex == -1) return currentBase; // 유효하지 않은 문자 처리
+
+        // 전이 확률을 기반으로 랜덤 선택
+        double r = (double)rand() / RAND_MAX;
+        double cumulative = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            cumulative += transitionProb[currentIndex][i];
+            if (r <= cumulative) {
+                return bases[i];
+            }
+        }
+        return currentBase; // 기본적으로 현재 문자 반환
+    };
+
+    // 매칭된 부분을 비교에 사용한 패턴 문자열로 교체
+    for (int i = 0; i < matches.size(); ++i) {
+        for (long long matchIndex : matches[i]) {
+            for (size_t k = 0; k < sequences[i].length(); ++k) {
+                if (matchIndex + k < resultText.length()) {
+                    if (resultText[matchIndex + k] != sequences[i][k]) {
+                        // 오차 발생: 전이 확률 기반으로 수정
+                        resultText[matchIndex + k] = generateRandomBase(resultText[matchIndex + k]);
+                    } else {
+                        // 매칭: 비교에 사용한 패턴 문자열로 대체
+                        resultText[matchIndex + k] = sequences[i][k];
+                    }
+                }
+            }
+        }
+    }
+
+    // 결과 문자열을 파일에 저장
+    outputFile << resultText;
+    outputFile.close();
+    std::cout << "결과 텍스트를 '" << outputFileName << "'에 저장했습니다." << std::endl;
+
+    // 또는, resultText의 길이를 출력
+    std::cout << "결과 텍스트의 길이: " << resultText.length() << " 문자\n";
+}
+
+/*
+    원본 문자열과 변환된 문자열을 비교하여 최종 오차율을 계산하는 함수
+    @parameters
+    - originalText: 원본 문자열
+    - transformedFileName: 변환된 문자열이 저장된 파일 이름
+    @returns
+    - 최종 오차율 (백분율)
+*/
+double calculateFinalErrorRate(const std::string& originalText, const std::string& transformedFileName) {
+    // 변환된 파일 읽기
+    std::ifstream inputFile(transformedFileName);
+    if (!inputFile) {
+        std::cerr << "파일을 열 수 없습니다: " << transformedFileName << std::endl;
+        exit(1);
+    }
+
+    std::string transformedText((std::istreambuf_iterator<char>(inputFile)),
+                                std::istreambuf_iterator<char>());
+
+    // 두 문자열의 길이가 동일한지 확인
+    if (originalText.length() != transformedText.length()) {
+        std::cerr << "오류: 원본 문자열과 변환된 문자열의 길이가 다릅니다." << std::endl;
+        exit(1);
+    }
+
+    // 오차 계산
+    long long totalErrors = 0;
+    long long totalLength = originalText.length();
+
+    for (size_t i = 0; i < totalLength; ++i) {
+        if (originalText[i] != transformedText[i]) {
+            totalErrors++;
+        }
+    }
+
+    // 오차율 계산
+    double errorRate = (static_cast<double>(totalErrors) / totalLength) * 100.0;
+
+    std::cout << "총 오차 개수: " << totalErrors << std::endl;
+    std::cout << "총 문자열 길이: " << totalLength << std::endl;
+    std::cout << std::fixed << std::setprecision(6);
+    std::cout << "최종 오차율: " << errorRate << "%\n";
+
+    return errorRate;
+}
+
+
+
 int main() {
     std::string text;           // 텍스트 문자열
     int patternLength;          // 패턴 길이
@@ -482,10 +600,16 @@ int main() {
     }
 
     // 전체 SNP 개수 및 오차율 출력
+    for (int i=0; i< numPatterns; i++){
+        std::cout << "패턴 " << i+1 << ": " << sequences[i] <<std::endl;
+    }
     std::cout << "\n전체 SNP 개수: " << totalSnps << std::endl;
     std::cout << "전체 문자열 길이: " << text.length() << std::endl;
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "전체 문자열에 대한 오차율: " << snpPercentage << "%\n";
+    std::string outputFileName = "transformed_text.txt";
+    saveTransformedTextToFile(text, allPatternMatches, sequences, transitionProb, outputFileName);
+    double finalErrorRate = calculateFinalErrorRate(text, outputFileName);
 
     // 메모리 정리 (트라이 노드 삭제)
     std::function<void(TrieNode*)> deleteTrie = [&](TrieNode* node) {
