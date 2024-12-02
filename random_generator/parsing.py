@@ -40,14 +40,16 @@ def parse_fasta_and_save(fasta_file, output_prefix, chunk_size=10_000_000):
                     total_processed += len(cleaned_line)
 
                     # If chunk size is reached, submit write task
-                    if current_length >= chunk_size:
+                    while current_length >= chunk_size:  # Process multiple chunks if needed
                         full_sequence = "".join(current_sequence)
                         future = executor.submit(write_chunk, full_sequence[:chunk_size], chunk_index)
                         futures.append(future)
 
+                        # Update sequence and length
+                        remaining_sequence = full_sequence[chunk_size:]
+                        current_sequence = [remaining_sequence]
+                        current_length = len(remaining_sequence)
                         chunk_index += 1
-                        current_sequence = [full_sequence[chunk_size:]]
-                        current_length = len(current_sequence[0])
 
                         # Print progress
                         print(f"Processing... Total characters processed: {total_processed}", end="\r")
@@ -63,4 +65,5 @@ def parse_fasta_and_save(fasta_file, output_prefix, chunk_size=10_000_000):
 
     print(f"\nFinished processing. Total characters processed: {total_processed}")
 
-parse_fasta_and_save("/Users/a1/algorithm/Algorithm/random_generator/GCF_009914755.1_T2T-CHM13v2.0_genomic.fna", "out_put", chunk_size=300_000_000)
+
+parse_fasta_and_save("/Users/a1/algorithm/Algorithm/random_generator/modified_genome.txt", "out_put_100_reads", chunk_size=100)
