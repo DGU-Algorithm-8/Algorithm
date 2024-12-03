@@ -32,7 +32,7 @@ char indexToBase(int index) {
 }
 
 // 4x4 전이 행렬을 파일에 저장
-void saveTransitionMatrix(const std::vector<std::vector<double>>& matrix, const std::string& filename) {
+void saveTransitionMatrix(const std::vector<std::vector<double> >& matrix, const std::string& filename) {
     std::ofstream outFile(filename);
     if (!outFile) {
         std::cerr << "Error: Unable to save transition matrix to '" << filename << "'.\n";
@@ -52,9 +52,9 @@ void saveTransitionMatrix(const std::vector<std::vector<double>>& matrix, const 
 }
 
 // 4x4 전이 행렬을 파일에서 읽기
-std::vector<std::vector<double>> loadTransitionMatrix(const std::string& filename) {
+std::vector<std::vector<double> > loadTransitionMatrix(const std::string& filename) {
     std::ifstream inFile(filename);
-    std::vector<std::vector<double>> matrix(4, std::vector<double>(4, 0.0));
+    std::vector<std::vector<double> > matrix(4, std::vector<double>(4, 0.0));
     if (!inFile) {
         std::cerr << "Error: Unable to load transition matrix from '" << filename << "'.\n";
         return matrix;
@@ -75,7 +75,7 @@ std::vector<std::vector<double>> loadTransitionMatrix(const std::string& filenam
 
 // DNA 서열 생성 함수
 std::vector<std::string> generateRandomDNASequences(
-    const std::vector<std::vector<double>>& transitionProb, int n, int m) {
+    const std::vector<std::vector<double> >& transitionProb, int n, int m) {
     std::vector<std::string> sequences;
     std::mt19937 rng(static_cast<unsigned int>(time(0)));
 
