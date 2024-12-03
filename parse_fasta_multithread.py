@@ -56,9 +56,9 @@ if __name__ == "__main__":
     parse_fasta_multithread(
         fasta_file="/Users/a1/algorithm/Algorithm/random_generator/modified_genome.txt",
         output_prefix="output",
-        chunk_size=100_000,  # 100KB
+        chunk_size=100,  # 100KB
         overlap_size=50,     # 겹치는 크기를 50으로 설정
-        num_threads=4        # 4개의 스레드 사용
+        num_threads=8        # 4개의 스레드 사용
     )
 
 #nano parse_fasta_multithread.py
